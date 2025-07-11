@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Crypto MVP</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+        input, button { padding: 10px; margin: 10px; }
+        #result { margin-top: 20px; font-size: 18px; }
+        #chart-container { width: 600px; margin: 20px auto; }
+    </style>
+</head>
+<body>
+    <h1>Previsão de Criptomoedas</h1>
+    <input type="text" id="coin_id" placeholder="Digite o pair (ex: SOL/USDT)" />
+    <button onclick="getPrediction()">Prever</button>
+    <div id="result"></div>
+    <button onclick="scanAll()">Scan All Coins</button>
+    <div id="scan-result"></div>
+    <div id="chart-container"><canvas id="cryptoChart"></canvas></div>
+
+    <script>
+        let myChart;
+
+        async function getPrediction() {
+            const coin = document.getElementById('coin_id').value || 'SOL/USDT';
+            const url = `http://localhost:8080/predict?coin=${coin}`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Erro na API');
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error);
+
+                document.getElementById('result').innerHTML = `
+                    <p><strong>Símbolo:</strong> ${data.symbol}</p>
+                    <p><strong>Preço Atual:</strong> $${data.current_price}</p>
+                    <p><strong>Preço Previsto:</strong> $${data.predicted_price}</p>
+                    <p><strong>Lucro Potencial:</strong> ${data.potential_profit}%</p>
+                    <p><strong>RSI:</strong> ${data.RSI}</p>
+                    <p><strong>MACD:</strong> ${data.MACD}</p>
+                    <p><strong>Signal:</strong> ${data.signal}</p>
+                    <p><strong>Recomendação:</strong> ${data.recommendation}</p>
+                `;
+
+                renderChart(data.chart_data);
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p>Erro: ${error.message}</p>`;
+            }
+        }
+
+        async function scanAll() {
+            const url = `http://localhost:8080/scan`;
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                let html = '<table border="1"><tr><th>Coin</th><th>RSI</th><th>MACD</th><th>Signal</th><th>Rec</th></tr>';
+                data.scan_results.forEach(item => {
+                    html += `<tr><td>${item.symbol}</td><td>${item.RSI}</td><td>${item.MACD}</td><td>${item.signal}</td><td>${item.recommendation}</td></tr>`;
+                });
+                html += '</table>';
+                document.getElementById('scan-result').innerHTML = html;
+            } catch (error) {
+                document.getElementById('scan-result').innerHTML = `<p>Erro: ${error.message}</p>`;
+            }
+        }
+
+        function renderChart(chartData) {
+            const ctx = document.getElementById('cryptoChart').getContext('2d');
+            const labels = chartData.map(item => item.timestamp);
+            const closes = chartData.map(item => item.close);
+            const rsis = chartData.map(item => item.RSI);
+            const macds = chartData.map(item => item.MACD);
+
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Close Price', data: closes, borderColor: 'blue', yAxisID: 'y' },
+                        { label: 'RSI', data: rsis, borderColor: 'green', yAxisID: 'y1' },
+                        { label: 'MACD', data: macds, borderColor: 'red', yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    scales: {
+                        y: { type: 'linear', position: 'left' },
+                        y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
