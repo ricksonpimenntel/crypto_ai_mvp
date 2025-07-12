@@ -25,7 +25,7 @@
 
         async function getPrediction() {
             const coin = document.getElementById('coin_id').value || 'SOL/USDT';
-            const url = `http://localhost:8080/predict?coin=${coin}`;
+            const url = `https://crypto-ai-mvp.onrender.com/predict?coin=${coin}`;
             
             try {
                 const response = await fetch(url);
@@ -52,7 +52,7 @@
         }
 
         async function scanAll() {
-            const url = `http://localhost:8080/scan`;
+            const url = `https://crypto-ai-mvp.onrender.com/scan`;
             try {
                 const response = await fetch(url);
                 const data = await response.json();
