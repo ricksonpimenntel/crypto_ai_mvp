@@ -1,6 +1,9 @@
 fastapi
 uvicorn
-ccxt
+requests
 pandas
+numpy
+statsmodels
+ccxt
 ta
 
