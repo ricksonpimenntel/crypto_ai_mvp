@@ -1,11 +1,10 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # Add if CORS issues, optional
+from flask_cors import CORS
 import requests
 import pandas as pd
-import ta  # For RSI; ensure 'ta-lib' is in requirements.txt
 
 app = Flask(__name__)
-CORS(app)  # Enables CORS for frontend requests, optional but good for MVP
+CORS(app)
 
 # Coin mapping to CoinGecko IDs
 COIN_MAP = {
@@ -16,6 +15,15 @@ COIN_MAP = {
     'ada': 'cardano'
 }
 
+def calculate_rsi(prices, period=14):
+    # Simple RSI without TA-Lib
+    delta = prices.diff()
+    gain = delta.where(delta > 0, 0).rolling(window=period).mean()
+    loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.iloc[-1]
+
 @app.route('/predict', methods=['GET'])
 def predict():
     coin = request.args.get('coin', '').lower()
@@ -24,23 +32,22 @@ def predict():
         return jsonify({'error': f'Coin não suportado: {coin.upper()}'}), 400
 
     try:
-        # Fetch 14 days of daily prices from CoinGecko
+        # Fetch 14 days of prices from CoinGecko
         url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/market_chart?vs_currency=usd&days=14&interval=daily"
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
         prices = data.get('prices', [])
         if not prices:
-            return jsonify({'error': 'No data available for this coin'}), 500
+            return jsonify({'error': 'No data available'}), 500
 
-        # Calculate RSI
         df = pd.DataFrame(prices, columns=['timestamp', 'price'])
-        rsi = ta.momentum.RSIIndicator(df['price']).rsi().iloc[-1]
+        rsi = calculate_rsi(df['price'])
 
         return jsonify({'rsi': round(rsi, 2)})
     except Exception as e:
-        print(f"Error calculating RSI for {coin}: {str(e)}")  # Logs for Render
+        print(f"Error: {str(e)}")  # For logs
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)  # Render uses port from env, but set default
+    app.run(host='0.0.0.0', port=8080)
