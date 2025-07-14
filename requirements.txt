@@ -1,9 +1,5 @@
-fastapi
-uvicorn
+flask
+flask-cors
 requests
 pandas
-numpy
-statsmodels
-ccxt
-ta
-
+ta-lib
