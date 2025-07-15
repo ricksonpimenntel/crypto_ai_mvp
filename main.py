@@ -1,52 +1,37 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
 import yfinance as yf
 import pandas as pd
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from ta.momentum import RSIIndicator
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI()
 
-# Coin mapping
-COIN_MAP = {
-    'btc': 'BTC-USD',
-    'eth': 'ETH-USD',
-    'xrp': 'XRP-USD',
-    'sol': 'SOL-USD',
-    'ada': 'ADA-USD'
-}
+# Allow CORS from anywhere (for frontend access)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def calculate_rsi(prices, period=14):
-    delta = prices.diff()
-    gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-    loss = -delta.where(delta < 0, 0).rolling(window=period).mean()
-    rs = gain / loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi.iloc[-1]
-
-@app.route('/predict', methods=['GET'])
-def predict():
-    coin = request.args.get('coin', '').lower()
-    symbol = COIN_MAP.get(coin)
-    if not symbol:
-        return jsonify({'error': f'Coin não suportado: {coin.upper()}'}), 400
-
+@app.get("/predict")
+def predict(coin: str):
     try:
-        # Fetch last 15 days daily prices
-        data = yf.download(symbol, period='15d', interval='1d')
-        if data.empty:
-            return jsonify({'error': 'No data available'}), 500
+        yf_symbol = coin.replace("/", "-")
+        df = yf.download(tickers=yf_symbol, period="7d", interval="1h")
 
-        closes = data['Close'].dropna()
-        if len(closes) < 15:
-            return jsonify({'error': 'Insufficient data for RSI'}), 500
+        if df.empty:
+            return {"error": "No data available from Yahoo Finance"}
 
-        rsi = calculate_rsi(closes)
+        rsi = RSIIndicator(close=df["Close"]).rsi().iloc[-1]
 
-        return jsonify({'rsi': round(rsi, 2)})
+        return {
+            "coin": coin,
+            "rsi": round(rsi, 2),
+            "recommendation": (
+                "BUY" if rsi < 30 else "SELL" if rsi > 70 else "HOLD"
+            )
+        }
+
     except Exception as e:
-        print(f"Error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
-    
+        return {"error": str(e)}
