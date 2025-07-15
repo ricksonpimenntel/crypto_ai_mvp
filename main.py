@@ -2,18 +2,20 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import pandas as pd
-from io import StringIO
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Coin mapping for Yahoo Finance symbols
+API_KEY = os.environ.get('ALPHA_VANTAGE_KEY')
+
+# Coin mapping for Alpha Vantage symbols
 COIN_MAP = {
-    'btc': 'BTC-USD',
-    'eth': 'ETH-USD',
-    'xrp': 'XRP-USD',
-    'sol': 'SOL-USD',
-    'ada': 'ADA-USD'
+    'btc': 'BTC',
+    'eth': 'ETH',
+    'xrp': 'XRP',
+    'sol': 'SOL',
+    'ada': 'ADA'
 }
 
 def calculate_rsi(prices, period=14):
@@ -32,21 +34,18 @@ def predict():
         return jsonify({'error': f'Coin não suportado: {coin}'}), 400
 
     try:
-        # Fetch last 15 days of daily prices from Yahoo Finance (CSV format)
-        url = f"https://finance.yahoo.com/quote/{symbol}/history?p={symbol}&period1={int(pd.Timestamp.now() - pd.Timedelta(days=15).timestamp())}&period2={int(pd.Timestamp.now().timestamp())}&interval=1d&filter=history&frequency=1d&includeAdjustedClose=true"
-        headers = {'User-Agent': 'Mozilla/5.0'}  # Mimic browser to avoid block
-        response = requests.get(url, headers=headers)
+        url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={symbol}&market=USD&apikey={API_KEY}"
+        response = requests.get(url)
         response.raise_for_status()
-        # Parse the CSV data from the response (Yahoo returns HTML with embedded CSV)
-        # Note: This is unofficial, but reliable for MVP
-        csv_data = response.text.split('HistoricalPriceStore": {"prices" :')[1].split(',"isPending"')[0]
-        df = pd.read_json(StringIO(csv_data))
-        df = df.sort_values('date')  # Sort by date
-        closes = df['close'].dropna()
-        if len(closes) < 15:
-            return jsonify({'error': 'Insufficient data for RSI'}), 500
+        data = response.json().get('Time Series (Digital Currency Daily)', {})
+        if not data:
+            return jsonify({'error': 'No data available'}), 500
 
-        rsi = calculate_rsi(closes[-15:])  # Last 15 closes for RSI
+        # Take last 15 days' close prices
+        dates = sorted(data.keys())[-15:]
+        closes = [float(data[date]['4. close']) for date in dates]
+        df = pd.DataFrame(closes, columns=['close'])
+        rsi = calculate_rsi(df['close'])
 
         return jsonify({'rsi': round(rsi, 2)})
     except Exception as e:
